@@ -1,5 +1,5 @@
 DATASET:
-  root_dataset: "./data/"
+  root_dataset: "//philly/eu2/resrchvc/v-miyin/data/"
   list_train: "./data/training.odgt"
   list_val: "./data/validation.odgt"
   num_class: 150
