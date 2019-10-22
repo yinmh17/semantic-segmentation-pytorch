@@ -4,19 +4,23 @@ import torch
 from torchvision import transforms
 import numpy as np
 from PIL import Image
+from lib.utils.zipreader import ZipReader
+import cv2
 
 
 def imresize(im, size, interp='bilinear'):
     if interp == 'nearest':
-        resample = Image.NEAREST
+        resample = PIL.Image.NEAREST
     elif interp == 'bilinear':
-        resample = Image.BILINEAR
+        resample = PIL.Image.BILINEAR
     elif interp == 'bicubic':
-        resample = Image.BICUBIC
+        resample = PIL.Image.BICUBIC
     else:
         raise Exception('resample method undefined!')
 
-    return im.resize(size, resample)
+    return np.array(
+        PIL.Image.fromarray(im).resize((size[1], size[0]), resample)
+    )
 
 
 class BaseDataset(torch.utils.data.Dataset):
@@ -52,14 +56,14 @@ class BaseDataset(torch.utils.data.Dataset):
 
     def img_transform(self, img):
         # 0-255 to 0-1
-        img = np.float32(np.array(img)) / 255.
+        img = np.float32(img) / 255.
         img = img.transpose((2, 0, 1))
         img = self.normalize(torch.from_numpy(img.copy()))
         return img
 
     def segm_transform(self, segm):
         # to tensor, -1 to 149
-        segm = torch.from_numpy(np.array(segm)).long() - 1
+        segm = torch.from_numpy(segm).long() - 1
         return segm
 
     # Round x to the nearest multiple of p and x' >= x
@@ -154,41 +158,41 @@ class TrainDataset(BaseDataset):
             this_record = batch_records[i]
 
             # load image and label
-            image_path = os.path.join(self.root_dataset, this_record['fpath_img'])
-            segm_path = os.path.join(self.root_dataset, this_record['fpath_segm'])
+            image_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'+this_record['fpath_img'].lstrip('ADEChallengeData2016')
+            segm_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'+this_record['fpath_segm'].lstrip('ADEChallengeData2016')
 
-            img = Image.open(image_path).convert('RGB')
-            segm = Image.open(segm_path)
-            assert(segm.mode == "L")
-            assert(img.size[0] == segm.size[0])
-            assert(img.size[1] == segm.size[1])
+            img = ZipReader.imread(image_path, 'BGR')
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            segm = ZipReader.imread(segm_path, 'P')
+            #assert(segm.mode == "L")
+            assert(img.shape[0] == segm.shape[0])
+            assert(img.shape[1] == segm.shape[1])
 
             # random_flip
-            if np.random.choice([0, 1]):
-                img = img.transpose(Image.FLIP_LEFT_RIGHT)
-                segm = segm.transpose(Image.FLIP_LEFT_RIGHT)
+            flip = np.random.choice(2) * 2 - 1
+            img = img[:, ::flip, :]
+            segm = segm[:, ::flip]
 
             # note that each sample within a mini batch has different scale param
-            img = imresize(img, (batch_widths[i], batch_heights[i]), interp='bilinear')
-            segm = imresize(segm, (batch_widths[i], batch_heights[i]), interp='nearest')
+            img = cv2.resize(img, (batch_widths[i], batch_heights[i]), cv2.INTER_LINEAR)
+            segm = cv2.resize(segm, (batch_widths[i], batch_heights[i]), cv2.INTER_NEAREST)
 
             # further downsample seg label, need to avoid seg label misalignment
-            segm_rounded_width = self.round2nearest_multiple(segm.size[0], self.segm_downsampling_rate)
-            segm_rounded_height = self.round2nearest_multiple(segm.size[1], self.segm_downsampling_rate)
-            segm_rounded = Image.new('L', (segm_rounded_width, segm_rounded_height), 0)
-            segm_rounded.paste(segm, (0, 0))
-            segm = imresize(
+            segm_rounded_height = self.round2nearest_multiple(segm.shape[0], self.segm_downsampling_rate)
+            segm_rounded_width = self.round2nearest_multiple(segm.shape[1], self.segm_downsampling_rate)
+            segm_rounded = np.zeros((segm_rounded_height, segm_rounded_width), dtype='uint8')
+            segm_rounded[:segm.shape[0], :segm.shape[1]] = segm
+            segm = cv2.resize(
                 segm_rounded,
-                (segm_rounded.size[0] // self.segm_downsampling_rate, \
-                 segm_rounded.size[1] // self.segm_downsampling_rate), \
-                interp='nearest')
+                (segm_rounded.shape[1] // self.segm_downsampling_rate, \
+                 segm_rounded.shape[0] // self.segm_downsampling_rate), \
+                cv2.INTER_NEAREST)
 
             # image transform, to torch float tensor 3xHxW
             img = self.img_transform(img)
 
             # segm transform, to torch long tensor HxW
             segm = self.segm_transform(segm)
-
             # put into batch arrays
             batch_images[i][:, :img.shape[1], :img.shape[2]] = img
             batch_segms[i][:segm.shape[0], :segm.shape[1]] = segm
@@ -211,15 +215,16 @@ class ValDataset(BaseDataset):
     def __getitem__(self, index):
         this_record = self.list_sample[index]
         # load image and label
-        image_path = os.path.join(self.root_dataset, this_record['fpath_img'])
-        segm_path = os.path.join(self.root_dataset, this_record['fpath_segm'])
-        img = Image.open(image_path).convert('RGB')
-        segm = Image.open(segm_path)
-        assert(segm.mode == "L")
-        assert(img.size[0] == segm.size[0])
-        assert(img.size[1] == segm.size[1])
+        image_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'+this_record['fpath_img'].lstrip('ADEChallengeData2016')
+        segm_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'+this_record['fpath_segm'].lstrip('ADEChallengeData2016')
+        img = ZipReader.imread(image_path, 'BGR')
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        segm = ZipReader.imread(segm_path, 'P')
 
-        ori_width, ori_height = img.size
+        assert(img.shape[0] == segm.shape[0])
+        assert(img.shape[1] == segm.shape[1])
+
+        ori_width, ori_height = img.shape[1], img.shape[0]
 
         img_resized_list = []
         for this_short_size in self.imgSizes:
@@ -233,7 +238,7 @@ class ValDataset(BaseDataset):
             target_height = self.round2nearest_multiple(target_height, self.padding_constant)
 
             # resize images
-            img_resized = imresize(img, (target_width, target_height), interp='bilinear')
+            img_resized = cv2.resize(img, (target_width, target_height), cv2.INTER_LINEAR)
 
             # image transform, to torch float tensor 3xHxW
             img_resized = self.img_transform(img_resized)
