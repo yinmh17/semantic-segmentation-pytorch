@@ -117,7 +117,8 @@ def main(cfg, gpu):
         fc_dim=cfg.MODEL.fc_dim,
         num_class=cfg.DATASET.num_class,
         weights=cfg.MODEL.weights_decoder,
-        use_softmax=True)
+        use_softmax=True,
+        opt=cfg.MODEL)
 
     crit = nn.NLLLoss(ignore_index=-1)
 
