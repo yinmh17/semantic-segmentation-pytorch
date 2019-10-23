@@ -106,9 +106,8 @@ def group_weight(module):
                 group_no_decay.append(m.weight)
             if m.bias is not None:
                 group_no_decay.append(m.bias)
-        elif isinstance(m, nn.Parameter):
-            group_no_decay.append(m)
-            print(m.shape)
+        else:
+            print('ATTENTION!', type(m), m.shape)
 
 
     assert len(list(module.parameters())) == len(group_decay) + len(group_no_decay)
