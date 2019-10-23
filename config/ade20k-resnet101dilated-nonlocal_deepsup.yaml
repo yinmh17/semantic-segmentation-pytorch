@@ -46,4 +46,4 @@ TEST:
   checkpoint: "epoch_25.pth"
   result: "./"
 
-DIR: "ckpt/ade20k-resnet101dilated-nonlocal_deepsup"
+DIR: "ckpt/ade25k-resnet101dilated-nonlocal_deepsup"
