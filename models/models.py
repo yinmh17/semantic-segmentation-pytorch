@@ -3,6 +3,8 @@ import torch.nn as nn
 import torchvision
 from . import resnet, resnext, mobilenet, hrnet
 from lib.nn import SynchronizedBatchNorm2d
+from models.ops.context_block import ContextBlock
+from models.ops.nonlocal_block import NonLocal2d_bn
 BatchNorm2d = SynchronizedBatchNorm2d
 
 
@@ -113,40 +115,54 @@ class ModelBuilder:
     @staticmethod
     def build_decoder(arch='ppm_deepsup',
                       fc_dim=512, num_class=150,
-                      weights='', use_softmax=False):
+                      weights='', use_softmax=False, opt=None):
         arch = arch.lower()
         if arch == 'c1_deepsup':
             net_decoder = C1DeepSup(
                 num_class=num_class,
                 fc_dim=fc_dim,
-                use_softmax=use_softmax)
+                use_softmax=use_softmax, opt=opt)
         elif arch == 'c1':
             net_decoder = C1(
                 num_class=num_class,
                 fc_dim=fc_dim,
-                use_softmax=use_softmax)
+                use_softmax=use_softmax, opt=opt)
         elif arch == 'ppm':
             net_decoder = PPM(
                 num_class=num_class,
                 fc_dim=fc_dim,
-                use_softmax=use_softmax)
+                use_softmax=use_softmax, opt=opt)
         elif arch == 'ppm_deepsup':
             net_decoder = PPMDeepsup(
                 num_class=num_class,
                 fc_dim=fc_dim,
-                use_softmax=use_softmax)
+                use_softmax=use_softmax,
+                opt=opt)
         elif arch == 'upernet_lite':
             net_decoder = UPerNet(
                 num_class=num_class,
                 fc_dim=fc_dim,
                 use_softmax=use_softmax,
-                fpn_dim=256)
+                fpn_dim=256,
+                opt=opt)
         elif arch == 'upernet':
             net_decoder = UPerNet(
                 num_class=num_class,
                 fc_dim=fc_dim,
                 use_softmax=use_softmax,
-                fpn_dim=512)
+                fpn_dim=512, opt=opt)
+        elif arch == 'nonlocal_deepsup':
+            net_decoder = NLModule(
+                num_class=num_class,
+                fc_dim=fc_dim,
+                use_softmax=use_softmax,
+                opt=opt)
+        elif arch == 'gcnet_deepsup':
+            net_decoder = GCBModule(
+                num_class=num_class,
+                fc_dim=fc_dim,
+                use_softmax=use_softmax,
+                opt=opt)
         else:
             raise Exception('Architecture undefined!')
 
@@ -166,6 +182,13 @@ def conv3x3_bn_relu(in_planes, out_planes, stride=1):
             BatchNorm2d(out_planes),
             nn.ReLU(inplace=True),
             )
+
+def conv3x3_bn(in_planes, out_planes, stride=1):
+    "3x3 convolution + BN + relu"
+    return nn.Sequential(
+            nn.Conv2d(in_planes, out_planes, kernel_size=3,
+                      stride=stride, padding=1, bias=False),
+            BatchNorm2d(out_planes))
 
 
 class Resnet(nn.Module):
@@ -326,7 +349,7 @@ class MobileNetV2Dilated(nn.Module):
 
 # last conv, deep supervision
 class C1DeepSup(nn.Module):
-    def __init__(self, num_class=150, fc_dim=2048, use_softmax=False):
+    def __init__(self, num_class=150, fc_dim=2048, use_softmax=False, opt=None):
         super(C1DeepSup, self).__init__()
         self.use_softmax = use_softmax
 
@@ -362,7 +385,7 @@ class C1DeepSup(nn.Module):
 
 # last conv
 class C1(nn.Module):
-    def __init__(self, num_class=150, fc_dim=2048, use_softmax=False):
+    def __init__(self, num_class=150, fc_dim=2048, use_softmax=False, opt=None):
         super(C1, self).__init__()
         self.use_softmax = use_softmax
 
@@ -385,11 +408,98 @@ class C1(nn.Module):
 
         return x
 
+#  nonlocal
+class NLModule(nn.Module):
+    def __init__(self, num_class=150, fc_dim=2048, use_softmax=False, opt=None):
+        super(NLModule, self).__init__()
+        self.use_softmax = use_softmax
+        inter_dim = fc_dim//4
+        self.conva = conv3x3_bn(fc_dim, inter_dim, 1)
+        self.NL = NonLocal2d_bn(inter_dim, inter_dim//2, downsample=opt.downsample, whiten_type=opt.whiten_type,
+                                temperature=opt.temp, with_gc=opt.with_gc, use_out=opt.use_out, out_bn=opt.out_bn)
+        self.convb = conv3x3_bn(inter_dim, inter_dim, 1)
+        self.conv_last = nn.Sequential(
+            nn.Conv2d(fc_dim+inter_dim, 512,
+                      kernel_size=3, padding=1, bias=False),
+            BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(0.1),
+            nn.Conv2d(512, num_class, kernel_size=1)
+        )
+        self.cbr_deepsup = conv3x3_bn_relu(fc_dim // 2, fc_dim // 4, 1)
+        self.conv_last_deepsup = nn.Conv2d(fc_dim // 4, num_class, 1, 1, 0)
+        self.dropout_deepsup = nn.Dropout2d(0.1)
+
+    def forward(self, conv_out, segSize=None):
+        conv5 = conv_out[-1]
+        x = self.conva(conv5)
+        x = self.NL(x)
+        x = self.convb(x)
+        x = self.conv_last(torch.cat([conv5, x], 1))
+        if self.use_softmax:  # is True during inference
+            x = nn.functional.interpolate(
+                x, size=segSize, mode='bilinear', align_corners=False)
+            x = nn.functional.softmax(x, dim=1)
+            return x
+        # deep sup
+        conv4 = conv_out[-2]
+        _ = self.cbr_deepsup(conv4)
+        _ = self.dropout_deepsup(_)
+        _ = self.conv_last_deepsup(_)
+
+        x = nn.functional.log_softmax(x, dim=1)
+        _ = nn.functional.log_softmax(_, dim=1)
+
+        return (x, _)
+
+
+#  gcnet
+class GCBModule(nn.Module):
+    def __init__(self, num_class=150, fc_dim=2048, use_softmax=False, opt=None):
+        super(GCBModule, self).__init__()
+        self.use_softmax = use_softmax
+        inter_dim = fc_dim // 4
+        self.conva = conv3x3_bn(fc_dim, inter_dim, 1)
+        self.ctb = ContextBlock(inter_dim, ratio=1./4)
+        self.convb = conv3x3_bn(inter_dim, inter_dim, 1)
+        self.conv_last = nn.Sequential(
+            nn.Conv2d(fc_dim + inter_dim, 512,
+                      kernel_size=3, padding=1, bias=False),
+            BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(0.1),
+            nn.Conv2d(512, num_class, kernel_size=1)
+        )
+        self.cbr_deepsup = conv3x3_bn_relu(fc_dim // 2, fc_dim // 4, 1)
+        self.conv_last_deepsup = nn.Conv2d(fc_dim // 4, num_class, 1, 1, 0)
+        self.dropout_deepsup = nn.Dropout2d(0.1)
+
+    def forward(self, conv_out, segSize=None):
+        conv5 = conv_out[-1]
+        x = self.conva(conv5)
+        x = self.ctb(x)
+        x = self.convb(x)
+        x = self.conv_last(torch.cat([conv5, x], 1))
+        if self.use_softmax:  # is True during inference
+            x = nn.functional.interpolate(
+                x, size=segSize, mode='bilinear', align_corners=False)
+            x = nn.functional.softmax(x, dim=1)
+            return x
+        # deep sup
+        conv4 = conv_out[-2]
+        _ = self.cbr_deepsup(conv4)
+        _ = self.dropout_deepsup(_)
+        _ = self.conv_last_deepsup(_)
+
+        x = nn.functional.log_softmax(x, dim=1)
+        _ = nn.functional.log_softmax(_, dim=1)
+
+        return (x, _)
 
 # pyramid pooling
 class PPM(nn.Module):
     def __init__(self, num_class=150, fc_dim=4096,
-                 use_softmax=False, pool_scales=(1, 2, 3, 6)):
+                 use_softmax=False, pool_scales=(1, 2, 3, 6), opt=None):
         super(PPM, self).__init__()
         self.use_softmax = use_softmax
 
@@ -438,7 +548,7 @@ class PPM(nn.Module):
 # pyramid pooling, deep supervision
 class PPMDeepsup(nn.Module):
     def __init__(self, num_class=150, fc_dim=4096,
-                 use_softmax=False, pool_scales=(1, 2, 3, 6)):
+                 use_softmax=False, pool_scales=(1, 2, 3, 6), opt=None):
         super(PPMDeepsup, self).__init__()
         self.use_softmax = use_softmax
 
@@ -500,7 +610,7 @@ class PPMDeepsup(nn.Module):
 class UPerNet(nn.Module):
     def __init__(self, num_class=150, fc_dim=4096,
                  use_softmax=False, pool_scales=(1, 2, 3, 6),
-                 fpn_inplanes=(256, 512, 1024, 2048), fpn_dim=256):
+                 fpn_inplanes=(256, 512, 1024, 2048), fpn_dim=256, opt=None):
         super(UPerNet, self).__init__()
         self.use_softmax = use_softmax
 
