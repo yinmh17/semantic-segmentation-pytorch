@@ -14,8 +14,6 @@ MODEL:
   arch_encoder: "resnet101dilated"
   arch_decoder: "nonlocal"
   fc_dim: 2048
-
-OPS:
   downsample: False
   whiten_type: []
   temp: 1.0
