@@ -13,10 +13,10 @@ MODEL:
   arch_encoder: "resnet101dilated"
   arch_decoder: "nonlocal_deepsup"
   fc_dim: 2048
-  downsample: True
-  whiten_type: ['channel']
-  temp: 0.05
-  with_gc: True
+  downsample: False
+  whiten_type: []
+  temp: 1.0
+  with_gc: False
   use_out: True
   out_bn: True
 
