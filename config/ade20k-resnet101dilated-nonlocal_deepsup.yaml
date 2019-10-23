@@ -15,11 +15,11 @@ MODEL:
   arch_decoder: "nonlocal_deepsup"
   fc_dim: 2048
   downsample: False
-  whiten_type: []
-  temp: 1.0
-  with_gc: False
-  use_out: True
-  out_bn: True
+  whiten_type: ['channel']
+  temp: 0.05
+  with_gc: True
+  use_out: False
+  out_bn: False
 
 TRAIN:
   batch_size_per_gpu: 2
