@@ -8,6 +8,46 @@ from lib.utils.zipreader import ZipReader
 import cv2
 
 
+def get_convert_label_fn(odgt):
+    """
+    A function that converts labels to expected range [-1, num_classes-1] where -1 is ignored.
+    When using custom dataset, you might want to add your own function.
+    """
+
+    def convert_ade_label(segm):
+        "Convert ADE labels to range [-1, 149]"
+        return segm - 1
+
+    def convert_cityscapes_label(segm):
+        "Convert cityscapes labels to range [-1, 18]"
+        ignore_label = -1
+        label_mapping = {
+            -1: ignore_label, 0: ignore_label,
+            1: ignore_label, 2: ignore_label,
+            3: ignore_label, 4: ignore_label,
+            5: ignore_label, 6: ignore_label,
+            7: 0, 8: 1, 9: ignore_label,
+            10: ignore_label, 11: 2, 12: 3,
+            13: 4, 14: ignore_label, 15: ignore_label,
+            16: ignore_label, 17: 5, 18: ignore_label,
+            19: 6, 20: 7, 21: 8, 22: 9, 23: 10, 24: 11,
+            25: 12, 26: 13, 27: 14, 28: 15,
+            29: ignore_label, 30: ignore_label,
+            31: 16, 32: 17, 33: 18}
+
+        temp = segm.clone()
+        for k, v in label_mapping.items():
+            segm[temp == k] = v
+        return segm
+
+    if 'cityscapes' in odgt.lower():
+        return convert_cityscapes_label
+    elif 'ade' in odgt.lower():
+        return convert_ade_label
+    else:
+        return lambda x: x
+
+
 def imresize(im, size, interp='bilinear'):
     if interp == 'nearest':
         resample = PIL.Image.NEAREST
@@ -38,6 +78,7 @@ class BaseDataset(torch.utils.data.Dataset):
         self.normalize = transforms.Normalize(
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225])
+        self.convert_label = get_convert_label_fn(odgt)
 
     def parse_input_list(self, odgt, max_sample=-1, start_idx=-1, end_idx=-1):
         if isinstance(odgt, list):
@@ -47,7 +88,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
         if max_sample > 0:
             self.list_sample = self.list_sample[0:max_sample]
-        if start_idx >= 0 and end_idx >= 0:     # divide file list
+        if start_idx >= 0 and end_idx >= 0:  # divide file list
             self.list_sample = self.list_sample[start_idx:end_idx]
 
         self.num_sample = len(self.list_sample)
@@ -61,9 +102,16 @@ class BaseDataset(torch.utils.data.Dataset):
         img = self.normalize(torch.from_numpy(img.copy()))
         return img
 
-    def segm_transform(self, segm):
+    def segm_transform_ade(self, segm):
         # to tensor, -1 to 149
         segm = torch.from_numpy(segm).long() - 1
+        return segm
+
+    def segm_transform_citi(self, segm):
+        # transform segm label to tensor
+        segm = torch.from_numpy(segm).long()
+        # convert/map labels to expected range
+        segm = self.convert_label(segm)
         return segm
 
     # Round x to the nearest multiple of p and x' >= x
@@ -85,6 +133,7 @@ class TrainDataset(BaseDataset):
         # override dataset length when trainig with batch_per_gpu > 1
         self.cur_idx = 0
         self.if_shuffled = False
+        self.odgt = odgt
 
     def _get_sub_batch(self):
         while True:
@@ -158,8 +207,16 @@ class TrainDataset(BaseDataset):
             this_record = batch_records[i]
 
             # load image and label
-            image_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'+this_record['fpath_img'].lstrip('ADEChallengeData2016')
-            segm_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'+this_record['fpath_segm'].lstrip('ADEChallengeData2016')
+            if 'ade' in self.odgt.lower():
+                image_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'\
+                +this_record['fpath_img'].lstrip('ADEChallengeData2016')
+                segm_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'\
+                +this_record['fpath_segm'].lstrip('ADEChallengeData2016')
+            elif 'cityscapes' in self.odgt.lower():
+                image_path = self.root_dataset+'leftImg8bit_trainvaltest.zip@/leftImg8bit/'\
+                +'/'.join(this_record['fpath_img'].split('/')[2:])
+                segm_path = self.root_dataset+'gtFine_trainvaltest.zip@/gtFine/'\
+                +'/'.join(this_record['fpath_segm'].split('/')[2:])
 
             img = ZipReader.imread(image_path, 'BGR')
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -192,7 +249,12 @@ class TrainDataset(BaseDataset):
             img = self.img_transform(img)
 
             # segm transform, to torch long tensor HxW
-            segm = self.segm_transform(segm)
+            if 'cityscapes' in self.odgt.lower():
+                segm = self.segm_transform_citi(segm)
+            elif 'ade' in self.odgt.lower():
+                segm = self.segm_transform_ade(segm)
+            else:
+                print('Dataset unrecognized')
             # put into batch arrays
             batch_images[i][:, :img.shape[1], :img.shape[2]] = img
             batch_segms[i][:segm.shape[0], :segm.shape[1]] = segm
@@ -215,8 +277,16 @@ class ValDataset(BaseDataset):
     def __getitem__(self, index):
         this_record = self.list_sample[index]
         # load image and label
-        image_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'+this_record['fpath_img'].lstrip('ADEChallengeData2016')
-        segm_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'+this_record['fpath_segm'].lstrip('ADEChallengeData2016')
+        if 'ade' in self.odgt.lower():
+            image_path = self.root_dataset + 'ADEChallengeData2016.zip@/ADEChallengeData2016' \
+                         + this_record['fpath_img'].lstrip('ADEChallengeData2016')
+            segm_path = self.root_dataset + 'ADEChallengeData2016.zip@/ADEChallengeData2016' \
+                        + this_record['fpath_segm'].lstrip('ADEChallengeData2016')
+        elif 'cityscapes' in self.odgt.lower():
+            image_path = self.root_dataset + 'leftImg8bit_trainvaltest.zip@/leftImg8bit/' \
+                         + '/'.join(this_record['fpath_img'].split('/')[2:])
+            segm_path = self.root_dataset + 'gtFine_trainvaltest.zip@/gtFine/' \
+                        + '/'.join(this_record['fpath_segm'].split('/')[2:])
         img = ZipReader.imread(image_path, 'BGR')
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         segm = ZipReader.imread(segm_path, 'P')
@@ -258,7 +328,6 @@ class ValDataset(BaseDataset):
 
     def __len__(self):
         return self.num_sample
-
 
 class TestDataset(BaseDataset):
     def __init__(self, odgt, opt, **kwargs):
