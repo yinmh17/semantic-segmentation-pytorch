@@ -107,9 +107,9 @@ def group_weight(module):
             if m.bias is not None:
                 group_no_decay.append(m.bias)
         else:
-            print('ATTENTION!', type(m), m.shape)
-
-
+            print('ATTENTION!', type(m))
+    
+    print(len(list(module.parameters())), len(group_decay) , len(group_no_decay))
     assert len(list(module.parameters())) == len(group_decay) + len(group_no_decay)
     groups = [dict(params=group_decay), dict(params=group_no_decay, weight_decay=.0)]
     return groups
