@@ -41,6 +41,18 @@ _C.MODEL.weights_decoder = ""
 # number of feature channels between encoder and decoder
 _C.MODEL.fc_dim = 2048
 
+_C.MODEL.downsample = False
+
+_C.MODEL.whiten_type = []
+
+_C.MODEL.temp = 1.0
+
+_C.MODEL.with_gc = False
+
+_C.MODEL.use_out = True
+
+_C.MODEL.out_bn = True
+
 # -----------------------------------------------------------------------------
 # Training
 # -----------------------------------------------------------------------------
