@@ -106,6 +106,10 @@ def group_weight(module):
                 group_no_decay.append(m.weight)
             if m.bias is not None:
                 group_no_decay.append(m.bias)
+        elif isinstance(m, nn.Parameter):
+            group_no_decay.append(m)
+            print(m.shape)
+
 
     assert len(list(module.parameters())) == len(group_decay) + len(group_no_decay)
     groups = [dict(params=group_decay), dict(params=group_no_decay, weight_decay=.0)]
@@ -149,7 +153,8 @@ def main(cfg, gpus):
         arch=cfg.MODEL.arch_decoder.lower(),
         fc_dim=cfg.MODEL.fc_dim,
         num_class=cfg.DATASET.num_class,
-        weights=cfg.MODEL.weights_decoder)
+        weights=cfg.MODEL.weights_decoder,
+        opt=cfg.MODEL)
 
     crit = nn.NLLLoss(ignore_index=-1)
 
