@@ -107,7 +107,8 @@ def worker(cfg, gpu_id, start_idx, end_idx, result_queue):
         fc_dim=cfg.MODEL.fc_dim,
         num_class=cfg.DATASET.num_class,
         weights=cfg.MODEL.weights_decoder,
-        use_softmax=True)
+        use_softmax=True,
+        opt=cfg.MODEL)
 
     crit = nn.NLLLoss(ignore_index=-1)
 
