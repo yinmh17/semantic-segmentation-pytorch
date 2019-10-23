@@ -12,7 +12,7 @@ DATASET:
 
 MODEL:
   arch_encoder: "resnet101dilated"
-  arch_decoder: "nonlocal"
+  arch_decoder: "nonlocal_deepsup"
   fc_dim: 2048
   downsample: False
   whiten_type: []
@@ -46,4 +46,4 @@ TEST:
   checkpoint: "epoch_25.pth"
   result: "./"
 
-DIR: "ckpt/ade20k-resnet50dilated-ppm_deepsup"
+DIR: "ckpt/ade20k-resnet101dilated-nonlocal_deepsup"
