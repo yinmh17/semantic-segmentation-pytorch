@@ -246,12 +246,9 @@ class TrainDataset(BaseDataset):
             img = self.img_transform(img)
 
             # segm transform, to torch long tensor HxW
+            segm = self.segm_transform_ade(segm)
             if 'cityscapes' in self.odgt.lower():
-                segm = self.segm_transform_citi(segm)
-            elif 'ade' in self.odgt.lower():
-                segm = self.segm_transform_ade(segm)
-            else:
-                print('Dataset unrecognized')
+                segm = self.convert_label(segm)
             # put into batch arrays
             batch_images[i][:, :img.shape[1], :img.shape[2]] = img
             batch_segms[i][:segm.shape[0], :segm.shape[1]] = segm
@@ -270,13 +267,14 @@ class ValDataset(BaseDataset):
     def __init__(self, root_dataset, odgt, opt, **kwargs):
         super(ValDataset, self).__init__(odgt, opt, **kwargs)
         self.root_dataset = root_dataset
+        self.odgt = odgt
 
     def __getitem__(self, index):
         this_record = self.list_sample[index]
         # load image and label
         image_path = self.root_dataset + 'ADEChallengeData2016.zip@/ADEChallengeData2016' + this_record['fpath_img'].lstrip('ADEChallengeData2016')
         segm_path = self.root_dataset + 'ADEChallengeData2016.zip@/ADEChallengeData2016' + this_record['fpath_segm'].lstrip('ADEChallengeData2016')
-        elif 'cityscapes' in self.odgt.lower():
+        if 'cityscapes' in self.odgt.lower():
             image_path = self.root_dataset + 'leftImg8bit_trainvaltest.zip@/leftImg8bit/' \
                          + '/'.join(this_record['fpath_img'].split('/')[2:])
             segm_path = self.root_dataset + 'gtFine_trainvaltest.zip@/gtFine/' \
@@ -309,8 +307,11 @@ class ValDataset(BaseDataset):
             img_resized = torch.unsqueeze(img_resized, 0)
             img_resized_list.append(img_resized)
 
+
         # segm transform, to torch long tensor HxW
-        segm = self.segm_transform(segm)
+        segm = self.segm_transform_ade(segm)
+        if 'cityscapes' in self.odgt.lower():
+            segm = self.convert_label(segm)      
         batch_segms = torch.unsqueeze(segm, 0)
 
         output = dict()
