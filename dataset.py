@@ -207,12 +207,9 @@ class TrainDataset(BaseDataset):
             this_record = batch_records[i]
 
             # load image and label
-            if 'ade' in self.odgt.lower():
-                image_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'\
-                +this_record['fpath_img'].lstrip('ADEChallengeData2016')
-                segm_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'\
-                +this_record['fpath_segm'].lstrip('ADEChallengeData2016')
-            elif 'cityscapes' in self.odgt.lower():
+            image_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'+this_record['fpath_img'].lstrip('ADEChallengeData2016')
+            segm_path = self.root_dataset+'ADEChallengeData2016.zip@/ADEChallengeData2016'+this_record['fpath_segm'].lstrip('ADEChallengeData2016')
+            if 'cityscapes' in self.odgt.lower():
                 image_path = self.root_dataset+'leftImg8bit_trainvaltest.zip@/leftImg8bit/'\
                 +'/'.join(this_record['fpath_img'].split('/')[2:])
                 segm_path = self.root_dataset+'gtFine_trainvaltest.zip@/gtFine/'\
@@ -277,11 +274,8 @@ class ValDataset(BaseDataset):
     def __getitem__(self, index):
         this_record = self.list_sample[index]
         # load image and label
-        if 'ade' in self.odgt.lower():
-            image_path = self.root_dataset + 'ADEChallengeData2016.zip@/ADEChallengeData2016' \
-                         + this_record['fpath_img'].lstrip('ADEChallengeData2016')
-            segm_path = self.root_dataset + 'ADEChallengeData2016.zip@/ADEChallengeData2016' \
-                        + this_record['fpath_segm'].lstrip('ADEChallengeData2016')
+        image_path = self.root_dataset + 'ADEChallengeData2016.zip@/ADEChallengeData2016' + this_record['fpath_img'].lstrip('ADEChallengeData2016')
+        segm_path = self.root_dataset + 'ADEChallengeData2016.zip@/ADEChallengeData2016' + this_record['fpath_segm'].lstrip('ADEChallengeData2016')
         elif 'cityscapes' in self.odgt.lower():
             image_path = self.root_dataset + 'leftImg8bit_trainvaltest.zip@/leftImg8bit/' \
                          + '/'.join(this_record['fpath_img'].split('/')[2:])
