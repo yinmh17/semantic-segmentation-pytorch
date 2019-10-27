@@ -58,7 +58,7 @@ class _NonLocalNd_bn(nn.Module):
         self.softmax = nn.Softmax(dim=2)
         self.downsample = max_pool
         # self.norm = nn.GroupNorm(num_groups=32, num_channels=inplanes) if use_gn else InPlaceABNSync(num_features=inplanes)
-        #self.gamma = nn.Parameter(torch.zeros(1))
+        self.gamma = nn.Parameter(torch.zeros(1))
         self.scale = math.sqrt(planes)
         self.whiten_type = whiten_type
         self.temperature = temperature
@@ -138,7 +138,7 @@ class _NonLocalNd_bn(nn.Module):
         out_sim = out_sim.view(out_sim.size(0), out_sim.size(1), *x.size()[2:])
         # if self.norm is not None:
         #     out = self.norm(out)
-        #out_sim = self.gamma * out_sim
+        out_sim = self.gamma * out_sim
 
         # out = residual + out_sim
 
