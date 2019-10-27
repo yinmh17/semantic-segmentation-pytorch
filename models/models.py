@@ -183,8 +183,18 @@ def conv3x3_bn_relu(in_planes, out_planes, stride=1):
             nn.ReLU(inplace=True),
             )
 
-def conv3x3_bn(in_planes, out_planes, stride=1):
+def conv3x3_bn_leakyrelu(in_planes, out_planes, stride=1):
     "3x3 convolution + BN + relu"
+    return nn.Sequential(
+            nn.Conv2d(in_planes, out_planes, kernel_size=3,
+                      stride=stride, padding=1, bias=False),
+            BatchNorm2d(out_planes),
+            nn.LeakyReLU(0.01,inplace=True),
+            )
+
+
+def conv3x3_bn(in_planes, out_planes, stride=1):
+    "3x3 convolution + BN "
     return nn.Sequential(
             nn.Conv2d(in_planes, out_planes, kernel_size=3,
                       stride=stride, padding=1, bias=False),
@@ -414,10 +424,10 @@ class NLModule(nn.Module):
         super(NLModule, self).__init__()
         self.use_softmax = use_softmax
         inter_dim = fc_dim//4
-        self.conva = conv3x3_bn(fc_dim, inter_dim, 1)
+        self.conva = conv3x3_bn_leakyrelu(fc_dim, inter_dim, 1)
         self.NL = NonLocal2d_bn(inter_dim, inter_dim//2, downsample=opt.downsample, whiten_type=opt.whiten_type,
                                 temperature=opt.temp, with_gc=opt.with_gc, use_out=opt.use_out, out_bn=opt.out_bn)
-        self.convb = conv3x3_bn(inter_dim, inter_dim, 1)
+        self.convb = conv3x3_bn_leakyrelu(inter_dim, inter_dim, 1)
         self.conv_last = nn.Sequential(
             nn.Conv2d(fc_dim+inter_dim, 512,
                       kernel_size=3, padding=1, bias=False),
@@ -426,7 +436,7 @@ class NLModule(nn.Module):
             nn.Dropout2d(0.1),
             nn.Conv2d(512, num_class, kernel_size=1)
         )
-        self.cbr_deepsup = conv3x3_bn_relu(fc_dim // 2, fc_dim // 4, 1)
+        self.cbr_deepsup = conv3x3_bn_leakyrelu(fc_dim // 2, fc_dim // 4, 1)
         self.conv_last_deepsup = nn.Conv2d(fc_dim // 4, num_class, 1, 1, 0)
         self.dropout_deepsup = nn.Dropout2d(0.1)
 
