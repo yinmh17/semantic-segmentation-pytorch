@@ -121,12 +121,14 @@ def group_weight(module):
 def create_optimizers(nets, cfg):
     (net_encoder, net_decoder, crit) = nets
     optimizer_encoder = torch.optim.SGD(
-        group_weight(net_encoder),
+        #group_weight(net_encoder),
+        [{'params': filter(lambda p: p.requires_grad, net_encoder.parameters()), 'lr': args.learning_rate }],
         lr=cfg.TRAIN.lr_encoder,
         momentum=cfg.TRAIN.beta1,
         weight_decay=cfg.TRAIN.weight_decay)
     optimizer_decoder = torch.optim.SGD(
-        group_weight(net_decoder),
+        #group_weight(net_decoder),
+        [{'params': filter(lambda p: p.requires_grad, net_decoder.parameters()), 'lr': args.learning_rate }],
         lr=cfg.TRAIN.lr_decoder,
         momentum=cfg.TRAIN.beta1,
         weight_decay=cfg.TRAIN.weight_decay)
