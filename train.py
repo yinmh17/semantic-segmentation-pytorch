@@ -89,7 +89,7 @@ def checkpoint(nets, history, cfg, epoch):
         '{}/decoder_epoch_{}.pth'.format(cfg.DIR, epoch))
 
 
-def group_weight(module):
+def group_weight(module, gamma=False):
     group_decay = []
     group_no_decay = []
     for m in module.modules():
@@ -111,6 +111,8 @@ def group_weight(module):
                 group_no_decay.append(m.weight)
             if m.bias is not None:
                 group_no_decay.append(m.bias)
+    if gamma:
+        group_no_decay.append(module.NL.gamma)
     
     print(len(list(module.parameters())), len(group_decay) , len(group_no_decay))
     assert len(list(module.parameters())) == len(group_decay) + len(group_no_decay)
@@ -121,14 +123,14 @@ def group_weight(module):
 def create_optimizers(nets, cfg):
     (net_encoder, net_decoder, crit) = nets
     optimizer_encoder = torch.optim.SGD(
-        #group_weight(net_encoder),
-        [{'params': filter(lambda p: p.requires_grad, net_encoder.parameters()), 'lr': cfg.TRAIN.lr_encoder }],
+        group_weight(net_encoder),
+        #[{'params': filter(lambda p: p.requires_grad, net_encoder.parameters()), 'lr': cfg.TRAIN.lr_encoder }],
         lr=cfg.TRAIN.lr_encoder,
         momentum=cfg.TRAIN.beta1,
         weight_decay=cfg.TRAIN.weight_decay)
     optimizer_decoder = torch.optim.SGD(
-        #group_weight(net_decoder),
-        [{'params': filter(lambda p: p.requires_grad, net_decoder.parameters()), 'lr': cfg.TRAIN.lr_decoder }],
+        group_weight(net_decoder, gamma=True),
+        #[{'params': filter(lambda p: p.requires_grad, net_decoder.parameters()), 'lr': cfg.TRAIN.lr_decoder }],
         lr=cfg.TRAIN.lr_decoder,
         momentum=cfg.TRAIN.beta1,
         weight_decay=cfg.TRAIN.weight_decay)
