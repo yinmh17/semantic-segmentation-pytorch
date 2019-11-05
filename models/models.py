@@ -5,6 +5,7 @@ from . import resnet, resnext, mobilenet, hrnet
 from lib.nn import SynchronizedBatchNorm2d
 from models.ops.context_block import ContextBlock
 from models.ops.nonlocal_block import NonLocal2d_bn
+from models.ops.nonlocal_block_nowd import NonLocal2d_nowd
 BatchNorm2d = SynchronizedBatchNorm2d
 
 
@@ -153,6 +154,12 @@ class ModelBuilder:
                 fpn_dim=512, opt=opt)
         elif arch == 'nonlocal_deepsup':
             net_decoder = NLModule(
+                num_class=num_class,
+                fc_dim=fc_dim,
+                use_softmax=use_softmax,
+                opt=opt)
+        elif arch == 'nonlocal_nowd_deepsup':
+            net_decoder = NLnowdModule(
                 num_class=num_class,
                 fc_dim=fc_dim,
                 use_softmax=use_softmax,
@@ -429,6 +436,58 @@ class NLModule(nn.Module):
         self.conva = conv3x3_bn_leakyrelu(fc_dim, inter_dim, 1)
         self.NL = NonLocal2d_bn(inter_dim, inter_dim//2, downsample=opt.downsample, whiten_type=opt.whiten_type,
                                 temperature=opt.temp, with_gc=opt.with_gc, use_out=opt.use_out, out_bn=opt.out_bn)
+        self.convb = conv3x3_bn_leakyrelu(inter_dim, inter_dim, 1)
+        self.conv_last = nn.Sequential(
+            nn.Conv2d(fc_dim+inter_dim, 512,
+                      kernel_size=3, padding=1, bias=False),
+            BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(0.1),
+            nn.Conv2d(512, num_class, kernel_size=1)
+        )
+        self.cbr_deepsup = conv3x3_bn_leakyrelu(fc_dim // 2, fc_dim // 4, 1)
+        self.conv_last_deepsup = nn.Conv2d(fc_dim // 4, num_class, 1, 1, 0)
+        self.dropout_deepsup = nn.Dropout2d(0.1)
+
+    def forward(self, conv_out, segSize=None):
+        conv5 = conv_out[-1]
+        x = self.conva(conv5)
+        x = self.NL(x)
+        x = self.convb(x)
+        x = self.conv_last(torch.cat([conv5, x], 1))
+        if self.use_softmax:  # is True during inference
+            x = nn.functional.interpolate(
+                x, size=segSize, mode='bilinear', align_corners=False)
+            #x = nn.functional.softmax(x, dim=1)
+            x = nn.functional.log_softmax(x, dim=1)
+            return x
+        # deep sup
+        conv4 = conv_out[-2]
+        _ = self.cbr_deepsup(conv4)
+        _ = self.dropout_deepsup(_)
+        _ = self.conv_last_deepsup(_)
+
+        x = nn.functional.log_softmax(x, dim=1)
+        _ = nn.functional.log_softmax(_, dim=1)
+
+        return (x, _)
+    
+#  nonlocal
+class NLnowdModule(nn.Module):
+    def __init__(self, num_class=150, fc_dim=2048, use_softmax=False, opt=None):
+        super(NLModule, self).__init__()
+        self.use_softmax = use_softmax
+        inter_dim = fc_dim//4
+        self.conva = conv3x3_bn_leakyrelu(fc_dim, inter_dim, 1)
+        self.NLnowd = NonLocal2d_nowd(inter_channels, inter_channels // 2,
+                                       downsample=opt.get('downsample', True),
+                                       whiten_type=opt.get('whiten_type',['ln_nostd']), 
+                                       weight_init_scale=opt.get('weight_init_scale', 1.0),
+                                       with_gc=opt.get('with_gc', False),
+                                       with_nl=opt.get('with_nl', True),
+                                       nowd=opt.get('nowd', ['nl']),
+                                       use_out=opt.get('use_out', False),
+                                       out_bn=opt.get('out_bn', False))
         self.convb = conv3x3_bn_leakyrelu(inter_dim, inter_dim, 1)
         self.conv_last = nn.Sequential(
             nn.Conv2d(fc_dim+inter_dim, 512,
