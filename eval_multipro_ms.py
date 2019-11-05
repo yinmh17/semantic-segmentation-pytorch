@@ -17,6 +17,7 @@ from lib.nn import user_scattered_collate, async_copy_to
 from lib.utils import as_numpy
 from PIL import Image
 from tqdm import tqdm
+from math import ceil
 
 colors = loadmat('data/color150.mat')['colors']
 
@@ -37,6 +38,12 @@ def visualize_result(data, pred, dir_result):
     img_name = info.split('/')[-1]
     Image.fromarray(im_vis).save(os.path.join(dir_result, img_name.replace('.jpg', '.png')))
 
+def pad_image(img, target_size):
+    """Pad an image up to the target size."""
+    rows_missing = target_size[0] - img.shape[2]
+    cols_missing = target_size[1] - img.shape[3]
+    padded_img = np.pad(img, ((0, 0), (0, 0), (0, rows_missing), (0, cols_missing)), 'constant')
+    return padded_img
 def predict_sliding(net, feed_dict, tile_size, classes, overlap=1.0/3.0):
     #interp = nn.Upsample(size=tile_size, mode='bilinear', align_corners=True)
     image=feed_dict['img_data']
