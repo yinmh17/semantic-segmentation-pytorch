@@ -115,7 +115,9 @@ def group_weight(module, gamma=False, nowd=False):
                 group_no_decay.append(m.weight)
             if m.bias is not None:
                 group_no_decay.append(m.bias)
-    if gamma:
+    if gamma and nowd:
+        group_decay.append(module.NLnowd.gamma)
+    elif gamma:
         group_decay.append(module.NL.gamma)
         
     
