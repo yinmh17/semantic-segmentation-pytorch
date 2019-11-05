@@ -479,7 +479,7 @@ class NLnowdModule(nn.Module):
         self.use_softmax = use_softmax
         inter_dim = fc_dim//4
         self.conva = conv3x3_bn_leakyrelu(fc_dim, inter_dim, 1)
-        self.NLnowd = NonLocal2d_nowd(inter_channels, inter_channels // 2,
+        self.NLnowd = NonLocal2d_nowd(inter_dim, inter_dim // 2,
                                        downsample=opt.get('downsample', True),
                                        whiten_type=opt.get('whiten_type',['ln_nostd']), 
                                        weight_init_scale=opt.get('weight_init_scale', 1.0),
