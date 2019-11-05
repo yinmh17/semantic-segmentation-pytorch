@@ -3,7 +3,8 @@ DATASET:
   list_train: "./data/training.odgt"
   list_val: "./data/validation.odgt"
   num_class: 150
-  imgSizes: (300, 375, 450, 525, 600)
+  imgSizes: (550, 600,650,700,750)
+  cropsize: (520,520)
   imgMaxSize: 1000
   padding_constant: 8
   segm_downsampling_rate: 8
@@ -22,7 +23,7 @@ MODEL:
 
 TRAIN:
   batch_size_per_gpu: 2
-  num_epoch: 25
+  num_epoch: 30
   start_epoch: 0
   epoch_iters: 5000
   optim: "SGD"
@@ -39,10 +40,10 @@ TRAIN:
 
 VAL:
   visualize: False
-  checkpoint: "epoch_25.pth"
+  checkpoint: "epoch_30.pth"
 
 TEST:
-  checkpoint: "epoch_25.pth"
+  checkpoint: "epoch_30.pth"
   result: "./"
 
 DIR: "ckpt/ade25k-resnet101dilated-nonlocal_convbn_deepsup"
