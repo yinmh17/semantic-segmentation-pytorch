@@ -118,7 +118,7 @@ def evaluate(segmentation_module, loader, cfg, gpu_id, result_queue):
 
                 # forward pass
                 #scores_tmp = segmentation_module(feed_dict, segSize=segSize)
-                scores_tmp = predict_sliding(segmentation_module, feed_dict, (321,321), cfg.DATASET.num_class, overlap=1.0/3.0)
+                scores_tmp = predict_sliding(segmentation_module, feed_dict, (520,520), cfg.DATASET.num_class, overlap=1.0/3.0)
                 scores_tmp = nn.functional.interpolate(scores_tmp, size=segSize, mode='bilinear', align_corners=False)
                 scores = scores + scores_tmp / len(cfg.DATASET.imgSizes)
 
