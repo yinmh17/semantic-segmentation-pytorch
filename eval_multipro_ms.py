@@ -37,8 +37,8 @@ def visualize_result(data, pred, dir_result):
     img_name = info.split('/')[-1]
     Image.fromarray(im_vis).save(os.path.join(dir_result, img_name.replace('.jpg', '.png')))
 
-def predict_sliding(net, feed_dict, crop_size, classes, recurrence, overlap=1.0/3.0):
-    #interp = nn.Upsample(size=crop_size, mode='bilinear', align_corners=True)
+def predict_sliding(net, feed_dict, tile_size, classes, overlap=1.0/3.0):
+    #interp = nn.Upsample(size=tile_size, mode='bilinear', align_corners=True)
     image=feed_dict['img_data']
     image_size = image.shape
     #overlap = 1.0/3.0
@@ -66,7 +66,9 @@ def predict_sliding(net, feed_dict, crop_size, classes, recurrence, overlap=1.0/
             # plt.show()
             tile_counter += 1
             # print("Predicting tile %i" % tile_counter)
-            padded_prediction = segmentation_module(feed_dict, segSize=crop_size)
+            crop_dict={}
+            crop_dict['img_data']=padded_img
+            padded_prediction = net(crop_dict, segSize=tile_size)
             #padded_prediction = interp(padded_prediction).cpu().data[0].numpy().transpose(1,2,0)
             prediction = padded_prediction[0:img.shape[2], 0:img.shape[3], :]
             count_predictions[y1:y2, x1:x2] += 1
@@ -101,7 +103,8 @@ def evaluate(segmentation_module, loader, cfg, gpu_id, result_queue):
                 feed_dict = async_copy_to(feed_dict, gpu_id)
 
                 # forward pass
-                scores_tmp = segmentation_module(feed_dict, segSize=segSize)
+                #scores_tmp = segmentation_module(feed_dict, segSize=segSize)
+                scores_tmp = predict_sliding(segmentation_module, feed_dict, (321,321), cfg.DATASET.num_class, overlap=1.0/3.0)
                 scores = scores + scores_tmp / len(cfg.DATASET.imgSizes)
 
             _, pred = torch.max(scores, dim=1)
