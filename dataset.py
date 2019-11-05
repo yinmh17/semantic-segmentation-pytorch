@@ -364,7 +364,7 @@ class TestDataset(BaseDataset):
     def __len__(self):
         return self.num_sample
     
-    class CropTrainDataset(BaseDataset):
+class CropTrainDataset(BaseDataset):
     def __init__(self, root_dataset, cropsize, odgt, opt, batch_per_gpu=1, **kwargs):
         super(CropTrainDataset, self).__init__(odgt, opt, **kwargs)
         self.root_dataset = root_dataset
