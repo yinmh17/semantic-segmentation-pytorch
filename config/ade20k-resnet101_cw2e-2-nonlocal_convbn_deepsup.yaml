@@ -3,8 +3,8 @@ DATASET:
   list_train: "./data/training.odgt"
   list_val: "./data/validation.odgt"
   num_class: 150
-  imgSizes: (500, 550, 600, 650, 700)
-  cropsize: 520
+  imgSizes: (550, 600, 650, 700, 750)
+  cropsize: (520,520)
   imgMaxSize: 2048
   padding_constant: 8
   segm_downsampling_rate: 8
@@ -16,7 +16,7 @@ MODEL:
   fc_dim: 2048
   downsample: False
   whiten_type: ['channel']
-  temp: 0.2
+  temp: 0.1
   with_gc: True
   use_out: True
   out_bn: True
