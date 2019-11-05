@@ -3,7 +3,8 @@ DATASET:
   list_train: "./data/training.odgt"
   list_val: "./data/validation.odgt"
   num_class: 150
-  imgSizes: (300, 375, 450, 525, 600)
+  imgSizes: (550,600,650,700,750)
+  cropsize: (520,520)
   imgMaxSize: 1000
   padding_constant: 8
   segm_downsampling_rate: 8
