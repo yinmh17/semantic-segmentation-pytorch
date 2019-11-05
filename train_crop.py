@@ -89,7 +89,7 @@ def checkpoint(nets, history, cfg, epoch):
         '{}/decoder_epoch_{}.pth'.format(cfg.DIR, epoch))
 
 
-def group_weight(module, gamma=False):
+def group_weight(module, gamma=False, nowd=False):
     group_decay = []
     group_no_decay = []
     for m in module.modules():
@@ -98,9 +98,13 @@ def group_weight(module, gamma=False):
             if m.bias is not None:
                 group_no_decay.append(m.bias)
         elif isinstance(m, nn.modules.conv._ConvNd):
-            group_decay.append(m.weight)
-            if m.bias is not None:
+            if m.weight.__dict__.get('wd', -1) == 0:
+                group_no_decay.append(m.weight)
                 group_no_decay.append(m.bias)
+            else:
+                group_decay.append(m.weight)
+                if m.bias is not None:
+                    group_no_decay.append(m.bias)
         elif isinstance(m, nn.modules.batchnorm._BatchNorm):
             if m.weight is not None:
                 group_no_decay.append(m.weight)
@@ -112,7 +116,8 @@ def group_weight(module, gamma=False):
             if m.bias is not None:
                 group_no_decay.append(m.bias)
     if gamma:
-        group_no_decay.append(module.NL.gamma)
+        group_decay.append(module.NL.gamma)
+        
     
     print(len(list(module.parameters())), len(group_decay) , len(group_no_decay))
     assert len(list(module.parameters())) == len(group_decay) + len(group_no_decay)
@@ -122,6 +127,8 @@ def group_weight(module, gamma=False):
 
 def create_optimizers(nets, cfg):
     (net_encoder, net_decoder, crit) = nets
+    gamma='nonlocal' in cfg.MODEL.arch_decoder
+    nowd='nowd' in cfg.MODEL.arch_decoder
     optimizer_encoder = torch.optim.SGD(
         group_weight(net_encoder),
         #[{'params': filter(lambda p: p.requires_grad, net_encoder.parameters()), 'lr': cfg.TRAIN.lr_encoder }],
@@ -129,7 +136,7 @@ def create_optimizers(nets, cfg):
         momentum=cfg.TRAIN.beta1,
         weight_decay=cfg.TRAIN.weight_decay)
     optimizer_decoder = torch.optim.SGD(
-        group_weight(net_decoder, gamma=True),
+        group_weight(net_decoder, gamma=gamma, nowd=nowd),
         #[{'params': filter(lambda p: p.requires_grad, net_decoder.parameters()), 'lr': cfg.TRAIN.lr_decoder }],
         lr=cfg.TRAIN.lr_decoder,
         momentum=cfg.TRAIN.beta1,
