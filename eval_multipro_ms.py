@@ -42,8 +42,11 @@ def pad_image(img, target_size):
     """Pad an image up to the target size."""
     rows_missing = target_size[0] - img.shape[2]
     cols_missing = target_size[1] - img.shape[3]
-    padded_img = np.pad(img, ((0, 0), (0, 0), (0, rows_missing), (0, cols_missing)), 'constant')
+    #padded_img = np.pad(img, ((0, 0), (0, 0), (0, rows_missing), (0, cols_missing)), 'constant')
+    pad_f = torch.nn.ZeroPad2d((0, rows_missing, 0, cols_missing))
+    padded_img = pad_f(img)
     return padded_img
+
 def predict_sliding(net, feed_dict, tile_size, classes, overlap=1.0/3.0):
     #interp = nn.Upsample(size=tile_size, mode='bilinear', align_corners=True)
     image=feed_dict['img_data']
@@ -54,9 +57,10 @@ def predict_sliding(net, feed_dict, tile_size, classes, overlap=1.0/3.0):
     tile_rows = int(ceil((image_size[2] - tile_size[0]) / stride) + 1)  # strided convolution formula
     tile_cols = int(ceil((image_size[3] - tile_size[1]) / stride) + 1)
     # print("Need %i x %i prediction tiles @ stride %i px" % (tile_cols, tile_rows, stride))
-    full_probs = np.zeros((image_size[2], image_size[3], classes))
-    count_predictions = np.zeros((image_size[2], image_size[3], classes))
+    full_probs = torch.zeros((1, classes, image_size[2], image_size[3])).cuda()
+    count_predictions = torch.zeros((1, classes, image_size[2], image_size[3])).cuda()
     tile_counter = 0
+    print(image_size, stride, tile_rows, tile_cols)
 
     for row in range(tile_rows):
         for col in range(tile_cols):
@@ -76,10 +80,13 @@ def predict_sliding(net, feed_dict, tile_size, classes, overlap=1.0/3.0):
             crop_dict={}
             crop_dict['img_data']=padded_img
             padded_prediction = net(crop_dict, segSize=tile_size)
+
             #padded_prediction = interp(padded_prediction).cpu().data[0].numpy().transpose(1,2,0)
-            prediction = padded_prediction[0:img.shape[2], 0:img.shape[3], :]
-            count_predictions[y1:y2, x1:x2] += 1
-            full_probs[y1:y2, x1:x2] += prediction  # accumulate the predictions also in the overlapping regions
+            #padded_prediction = padded_prediction.squeeze().permute(1,2,0)
+            prediction = padded_prediction[:,:,0:img.shape[2], 0:img.shape[3]]
+            print(prediction.shape, full_probs[:,:,y1:y2, x1:x2].shape)
+            count_predictions[:,:,y1:y2, x1:x2] += 1
+            full_probs[:,:,y1:y2, x1:x2] += prediction  # accumulate the predictions also in the overlapping regions
 
     # average the predictions in the overlapping regions
     full_probs /= count_predictions
@@ -112,6 +119,7 @@ def evaluate(segmentation_module, loader, cfg, gpu_id, result_queue):
                 # forward pass
                 #scores_tmp = segmentation_module(feed_dict, segSize=segSize)
                 scores_tmp = predict_sliding(segmentation_module, feed_dict, (321,321), cfg.DATASET.num_class, overlap=1.0/3.0)
+                scores_tmp = nn.functional.interpolate(scores_tmp, size=segSize, mode='bilinear', align_corners=False)
                 scores = scores + scores_tmp / len(cfg.DATASET.imgSizes)
 
             _, pred = torch.max(scores, dim=1)
