@@ -25,7 +25,7 @@ _C.DATASET.padding_constant = 8
 _C.DATASET.segm_downsampling_rate = 8
 # randomly horizontally flip images when train/test
 _C.DATASET.random_flip = True
-
+_C.DATASET.cropsize = (520,520)
 # -----------------------------------------------------------------------------
 # Model
 # -----------------------------------------------------------------------------
