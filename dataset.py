@@ -6,7 +6,8 @@ import numpy as np
 from PIL import Image
 from lib.utils.zipreader import ZipReader
 import cv2
-
+import random
+import collections
 
 def get_convert_label_fn(odgt):
     """
