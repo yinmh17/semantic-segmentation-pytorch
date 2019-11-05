@@ -475,7 +475,7 @@ class NLModule(nn.Module):
 #  nonlocal
 class NLnowdModule(nn.Module):
     def __init__(self, num_class=150, fc_dim=2048, use_softmax=False, opt=None):
-        super(NLModule, self).__init__()
+        super(NLnowdModule, self).__init__()
         self.use_softmax = use_softmax
         inter_dim = fc_dim//4
         self.conva = conv3x3_bn_leakyrelu(fc_dim, inter_dim, 1)
