@@ -26,7 +26,7 @@ _C.DATASET.segm_downsampling_rate = 8
 # randomly horizontally flip images when train/test
 _C.DATASET.random_flip = True
 _C.DATASET.cropsize = (520,520)
-_C.DATASET.weight_init_scale = 1.0
+
 # -----------------------------------------------------------------------------
 # Model
 # -----------------------------------------------------------------------------
@@ -54,6 +54,7 @@ _C.MODEL.use_out = True
 
 _C.MODEL.out_bn = True
 
+_C.MODEL.weight_init_scale = 1.0
 # -----------------------------------------------------------------------------
 # Training
 # -----------------------------------------------------------------------------
