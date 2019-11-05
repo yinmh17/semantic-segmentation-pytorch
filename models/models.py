@@ -504,7 +504,7 @@ class NLnowdModule(nn.Module):
     def forward(self, conv_out, segSize=None):
         conv5 = conv_out[-1]
         x = self.conva(conv5)
-        x = self.NL(x)
+        x = self.NLnowd(x)
         x = self.convb(x)
         x = self.conv_last(torch.cat([conv5, x], 1))
         if self.use_softmax:  # is True during inference
